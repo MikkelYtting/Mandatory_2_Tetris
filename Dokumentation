@@ -1,0 +1,7 @@
+pip install tensorboard tensorboardX
+pip install pillow opencv-python torch numpy matplotlib tensorboardX
+pip install --upgrade tensorboard tensorflow
+
+python train.py --num_models=4
+python test.py
+python dummy_play.py
