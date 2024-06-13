@@ -79,6 +79,15 @@ def plot_blocks_per_epoch(blocks_per_epoch, title, color):
     plt.ylabel('Number of Blocks')
     plt.legend()
     plt.grid(True)
+
+    # Create the directory if it doesn't exist
+    save_folder = 'plot_blocks_per_epoch'
+    os.makedirs(save_folder, exist_ok=True)
+
+    # Save the plot
+    plt.savefig(os.path.join(save_folder, 'blocks_per_epoch.png'))
+    
+    # Display the plot
     plt.show()
 
 if __name__ == "__main__":

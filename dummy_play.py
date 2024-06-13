@@ -1,12 +1,10 @@
 import argparse
 import torch
-import cv2
 import shutil
 import os
+import json
 from src.tetris import Tetris
 from random import randint
-from tensorboardX import SummaryWriter
-from tensorflow.python.summary.summary_iterator import summary_iterator
 import matplotlib.pyplot as plt
 
 def get_args():
@@ -16,9 +14,9 @@ def get_args():
     parser.add_argument("--height", type=int, default=20, help="The common height for all images")
     parser.add_argument("--block_size", type=int, default=30, help="Size of a block")
     parser.add_argument("--fps", type=int, default=300, help="frames per second")
-    parser.add_argument("--log_path", type=str, default="dummy_tensorboard")
     parser.add_argument("--num_epochs", type=int, default=10, help="Number of epochs to run")
-    parser.add_argument("--max_blocks", type=int, default=10000, help="Maximum number of blocks to run")
+    parser.add_argument("--max_blocks", type=int, default=50000, help="Maximum number of blocks to run")
+    parser.add_argument("--output_file", type=str, default="dummy_play_output/blocks_per_epoch.json", help="File to save the blocks per epoch")
 
     args = parser.parse_args()
     return args
@@ -29,9 +27,9 @@ def clear_log_dir(log_dir):
     os.makedirs(log_dir)
 
 def dummy_play(opt):
-    clear_log_dir(opt.log_path)  # Clear the log directory before starting the test
+    # Ensure the output directory exists
+    os.makedirs(os.path.dirname(opt.output_file), exist_ok=True)
 
-    writer = SummaryWriter(opt.log_path)
     total_blocks = 0
     epoch = 0
     blocks_per_epoch = []
@@ -52,13 +50,9 @@ def dummy_play(opt):
             total_blocks += 1
 
             if done:
-                # Log the number of blocks to TensorBoard at the end of the epoch
-                writer.add_scalar('Dummy/Number_of_Blocks', num_blocks, epoch)
                 blocks_per_epoch.append(num_blocks)
                 print(f"Epoch: {epoch}, Number of Blocks: {num_blocks}")
                 break
-
-    writer.close()
 
     # Print total blocks and average blocks per epoch
     total_epochs = len(blocks_per_epoch)
@@ -69,8 +63,10 @@ def dummy_play(opt):
     # Plot the data
     plot_blocks_per_epoch(blocks_per_epoch, 'Dummy Model Blocks per Epoch', 'b')
 
-    # Automatically inspect and print the logs after running the dummy model
-    inspect_logs(opt.log_path)
+    # Save the output in an array
+    save_blocks_per_epoch(blocks_per_epoch, opt.output_file)
+
+    return blocks_per_epoch
 
 def plot_blocks_per_epoch(blocks_per_epoch, title, color):
     average_blocks = sum(blocks_per_epoch) / len(blocks_per_epoch)
@@ -84,15 +80,15 @@ def plot_blocks_per_epoch(blocks_per_epoch, title, color):
     plt.grid(True)
     plt.show()
 
-def inspect_logs(log_dir):
-    event_files = [f for f in os.listdir(log_dir) if f.startswith('events.out.tfevents')]
-    for event_file in event_files:
-        event_path = os.path.join(log_dir, event_file)
-        print(f"Inspecting {event_path}")
-        for summary in summary_iterator(event_path):
-            for value in summary.summary.value:
-                print(value.tag, value.simple_value)
+def save_blocks_per_epoch(blocks_per_epoch, output_file):
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+
+    with open(output_file, 'w') as f:
+        json.dump(blocks_per_epoch, f)
+    print(f"Blocks per epoch saved to {output_file}")
 
 if __name__ == "__main__":
     opt = get_args()
-    dummy_play(opt)
+    blocks_per_epoch = dummy_play(opt)  # Capture the output in an array
+    print("Blocks per epoch:", blocks_per_epoch)

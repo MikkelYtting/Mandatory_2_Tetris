@@ -23,13 +23,13 @@ def get_args():
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--initial_epsilon", type=float, default=1)
     parser.add_argument("--final_epsilon", type=float, default=1e-3)
-    parser.add_argument("--num_decay_epochs", type=float, default=2000)
+    parser.add_argument("--num_decay_epochs", type=float, default=2000) # højere decay = længere tids trænning
     parser.add_argument("--num_epochs", type=int, default=3000)
     parser.add_argument("--save_interval", type=int, default=1000)
     parser.add_argument("--replay_memory_size", type=int, default=30000,
                         help="Number of epochs between testing phases")
     parser.add_argument("--saved_path", type=str, default="trained_models")
-    parser.add_argument("--num_models", type=int, default=4, help="Number of models to train concurrently")
+    parser.add_argument("--num_models", type=int, default=1, help="Number of models to train concurrently")
     parser.add_argument("--max_blocks", type=int, default=50000, help="Maximum number of blocks to run")
 
     args = parser.parse_args()
@@ -55,12 +55,14 @@ def train_model(opt, model_id, queue):
     epoch = 0
     total_blocks = 0
     epsilon_values = []
+    epoch_values = []
     while total_blocks < opt.max_blocks and epoch < opt.num_epochs:
         next_steps = env.get_next_states()
         # Exploration or exploitation
         epsilon = opt.final_epsilon + (max(opt.num_decay_epochs - epoch, 0) * (
                 opt.initial_epsilon - opt.final_epsilon) / opt.num_decay_epochs)
         epsilon_values.append(epsilon)  # Log the epsilon value
+        epoch_values.append(epoch)  # Log the epoch value
         u = random()
         random_action = u <= epsilon
         next_actions, next_states = zip(*next_steps.items())
@@ -122,15 +124,10 @@ def train_model(opt, model_id, queue):
             model_path = "{}/tetris_model_{}_epoch_{}_{}".format(opt.saved_path, model_id, epoch, timestamp)
             torch.save(model, model_path)
 
-        if final_score >= 500:  # Check if model has achieved the desired performance
-            model_path = "{}/tetris_model_{}_epoch_{}_final".format(opt.saved_path, model_id, epoch)
-            torch.save(model, model_path)
-            queue.put((model_id, final_score, model_path, epsilon_values))
-            return
-
+    # Save the final model at the end of training
     model_path = "{}/tetris_model_{}_epoch_{}_final".format(opt.saved_path, model_id, epoch)
     torch.save(model, model_path)
-    queue.put((model_id, final_score, model_path, epsilon_values))
+    queue.put((model_id, final_score, model_path, epoch_values, epsilon_values))
 
 def main(opt):
     processes = []
@@ -140,13 +137,13 @@ def main(opt):
         p.start()
         processes.append(p)
 
-    best_model_id, best_score, best_model_path, best_epsilon_values = None, 0, None, []
+    best_model_id, best_score, best_model_path, best_epoch_values, best_epsilon_values = None, 0, None, [], []
     model_paths = []
     for _ in range(opt.num_models):
-        model_id, score, model_path, epsilon_values = queue.get()
+        model_id, score, model_path, epoch_values, epsilon_values = queue.get()
         model_paths.append(model_path)
         if score > best_score:
-            best_model_id, best_score, best_model_path, best_epsilon_values = model_id, score, model_path, epsilon_values
+            best_model_id, best_score, best_model_path, best_epoch_values, best_epsilon_values = model_id, score, model_path, epoch_values, epsilon_values
 
     for p in processes:
         p.join()
@@ -162,11 +159,11 @@ def main(opt):
         print("No model reached the desired performance threshold.")
 
     # Plot the epsilon values for the best model
-    plot_epsilon_values(best_epsilon_values)
+    plot_epsilon_values(best_epoch_values, best_epsilon_values)
 
-def plot_epsilon_values(epsilon_values):
+def plot_epsilon_values(epoch_values, epsilon_values):
     plt.figure(figsize=(10, 6))
-    plt.plot(epsilon_values, marker='o', linestyle='-', color='b')
+    plt.plot(epoch_values, epsilon_values, marker='o', linestyle='-', color='b')
     plt.title('Epsilon Value per Epoch for Best Model')
     plt.xlabel('Epoch')
     plt.ylabel('Epsilon')
