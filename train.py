@@ -13,36 +13,39 @@ from src.tetris import Tetris
 from collections import deque
 
 def get_args():
+    # Henter argumenter fra kommandolinjen
     parser = argparse.ArgumentParser(
         """Implementation of Deep Q Network to play Tetris""")
-    parser.add_argument("--width", type=int, default=10, help="The common width for all images")
-    parser.add_argument("--height", type=int, default=20, help="The common height for all images")
-    parser.add_argument("--block_size", type=int, default=30, help="Size of a block")
-    parser.add_argument("--batch_size", type=int, default=512, help="The number of images per batch")
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--gamma", type=float, default=0.99)
-    parser.add_argument("--initial_epsilon", type=float, default=1)
-    parser.add_argument("--final_epsilon", type=float, default=1e-3)
-    parser.add_argument("--num_decay_epochs", type=float, default=2000) # højere decay = længere tids trænning
-    parser.add_argument("--num_epochs", type=int, default=3000)
-    parser.add_argument("--save_interval", type=int, default=1000)
-    parser.add_argument("--replay_memory_size", type=int, default=30000,
-                        help="Number of epochs between testing phases")
-    parser.add_argument("--saved_path", type=str, default="trained_models")
-    parser.add_argument("--num_models", type=int, default=1, help="Number of models to train concurrently")
-    parser.add_argument("--max_blocks", type=int, default=50000, help="Maximum number of blocks to run")
+    parser.add_argument("--width", type=int, default=10, help="Bredden på spillet")
+    parser.add_argument("--height", type=int, default=20, help="Højden på spillet")
+    parser.add_argument("--block_size", type=int, default=30, help="Størrelsen på en blok")
+    parser.add_argument("--batch_size", type=int, default=512, help="Antal billeder per batch")
+    parser.add_argument("--lr", type=float, default=1e-3, help="Læringsrate")
+    parser.add_argument("--gamma", type=float, default=0.99, help="Diskonteringsfaktor")
+    parser.add_argument("--initial_epsilon", type=float, default=1, help="Initial epsilon værdi")
+    parser.add_argument("--final_epsilon", type=float, default=1e-3, help="Endelig epsilon værdi")
+    parser.add_argument("--num_decay_epochs", type=float, default=2000, help="Antal decay epochs")
+    parser.add_argument("--num_epochs", type=int, default=3000, help="Antal epochs")
+    parser.add_argument("--save_interval", type=int, default=1000, help="Gem interval")
+    parser.add_argument("--replay_memory_size", type=int, default=30000, help="Størrelse af replay memory")
+    parser.add_argument("--saved_path", type=str, default="trained_models", help="Sti til gemte modeller")
+    parser.add_argument("--num_models", type=int, default=1, help="Antal modeller at træne samtidigt")
+    parser.add_argument("--max_blocks", type=int, default=50000, help="Maksimalt antal blokke")
 
     args = parser.parse_args()
     return args
 
 def train_model(opt, model_id, queue):
+    # Opsætning af enhed (GPU eller CPU)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
+    # Initialisering af tilfældig frø
     torch.manual_seed(123 + model_id)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(123 + model_id)
 
+    # Initialisering af miljø og model
     env = Tetris(width=opt.width, height=opt.height, block_size=opt.block_size)
     model = DeepQNetwork().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=opt.lr)
@@ -56,13 +59,16 @@ def train_model(opt, model_id, queue):
     total_blocks = 0
     epsilon_values = []
     epoch_values = []
+    
+    # Træningsloop
     while total_blocks < opt.max_blocks and epoch < opt.num_epochs:
         next_steps = env.get_next_states()
-        # Exploration or exploitation
+        
+        # Exploration eller exploitation
         epsilon = opt.final_epsilon + (max(opt.num_decay_epochs - epoch, 0) * (
                 opt.initial_epsilon - opt.final_epsilon) / opt.num_decay_epochs)
-        epsilon_values.append(epsilon)  # Log the epsilon value
-        epoch_values.append(epoch)  # Log the epoch value
+        epsilon_values.append(epsilon)  # Logger epsilon værdi
+        epoch_values.append(epoch)  # Logger epoch værdi
         u = random()
         random_action = u <= epsilon
         next_actions, next_states = zip(*next_steps.items())
@@ -124,7 +130,7 @@ def train_model(opt, model_id, queue):
             model_path = "{}/tetris_model_{}_epoch_{}_{}".format(opt.saved_path, model_id, epoch, timestamp)
             torch.save(model, model_path)
 
-    # Save the final model at the end of training
+    # Gem den endelige model ved slutningen af træningen
     model_path = "{}/tetris_model_{}_epoch_{}_final".format(opt.saved_path, model_id, epoch)
     torch.save(model, model_path)
     queue.put((model_id, final_score, model_path, epoch_values, epsilon_values))
@@ -148,7 +154,7 @@ def main(opt):
     for p in processes:
         p.join()
 
-    # Delete all models except the best one
+    # Slet alle modeller undtagen den bedste
     for path in model_paths:
         if path != best_model_path:
             os.remove(path)
@@ -158,10 +164,11 @@ def main(opt):
     else:
         print("No model reached the desired performance threshold.")
 
-    # Plot the epsilon values for the best model
+    # Plot epsilon værdierne for den bedste model
     plot_epsilon_values(best_epoch_values, best_epsilon_values)
 
 def plot_epsilon_values(epoch_values, epsilon_values):
+    # Plotter epsilon værdierne over epochs
     plt.figure(figsize=(10, 6))
     plt.plot(epoch_values, epsilon_values, marker='o', linestyle='-', color='b')
     plt.title('Epsilon Value per Epoch for Best Model')

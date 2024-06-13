@@ -9,6 +9,7 @@ style.use("ggplot")
 
 
 class Tetris:
+    # Farver til brikkerne
     piece_colors = [
         (0, 0, 0),
         (255, 255, 0),
@@ -20,6 +21,7 @@ class Tetris:
         (0, 0, 255)
     ]
 
+    # Brikkernes former
     pieces = [
         [[1, 1],
          [1, 1]],
@@ -43,6 +45,7 @@ class Tetris:
     ]
 
     def __init__(self, height=20, width=10, block_size=20):
+        # Initialiserer spillets størrelse og andre attributter
         self.height = height
         self.width = width
         self.block_size = block_size
@@ -52,6 +55,7 @@ class Tetris:
         self.reset()
 
     def reset(self):
+        # Nulstiller spillet
         self.board = [[0] * self.width for _ in range(self.height)]
         self.score = 0
         self.tetrominoes = 0
@@ -65,6 +69,7 @@ class Tetris:
         return self.get_state_properties(self.board)
 
     def rotate(self, piece):
+        # Roterer en brik 90 grader
         num_rows_orig = num_cols_new = len(piece)
         num_rows_new = len(piece[0])
         rotated_array = []
@@ -77,6 +82,7 @@ class Tetris:
         return rotated_array
 
     def get_state_properties(self, board):
+        # Henter tilstandsparametre for brættet
         lines_cleared, board = self.check_cleared_rows(board)
         holes = self.get_holes(board)
         bumpiness, height = self.get_bumpiness_and_height(board)
@@ -84,6 +90,7 @@ class Tetris:
         return torch.FloatTensor([lines_cleared, holes, bumpiness, height])
 
     def get_holes(self, board):
+        # Finder antallet af huller i brættet
         num_holes = 0
         for col in zip(*board):
             row = 0
@@ -93,6 +100,7 @@ class Tetris:
         return num_holes
 
     def get_bumpiness_and_height(self, board):
+        # Finder bumpiness og højde af brættet
         board = np.array(board)
         mask = board != 0
         invert_heights = np.where(mask.any(axis=0), np.argmax(mask, axis=0), self.height)
@@ -105,10 +113,11 @@ class Tetris:
         return total_bumpiness, total_height
 
     def get_next_states(self):
+        # Finder alle mulige næste tilstande
         states = {}
         piece_id = self.ind
         curr_piece = [row[:] for row in self.piece]
-        if piece_id == 0:  # O piece
+        if piece_id == 0:  # O-brik
             num_rotations = 1
         elif piece_id == 2 or piece_id == 3 or piece_id == 4:
             num_rotations = 2
@@ -129,6 +138,7 @@ class Tetris:
         return states
 
     def get_current_board_state(self):
+        # Får den aktuelle tilstand af brættet
         board = [x[:] for x in self.board]
         for y in range(len(self.piece)):
             for x in range(len(self.piece[y])):
@@ -136,18 +146,18 @@ class Tetris:
         return board
 
     def new_piece(self):
+        # Skaber en ny brik
         if not len(self.bag):
             self.bag = list(range(len(self.pieces)))
             random.shuffle(self.bag)
         self.ind = self.bag.pop()
         self.piece = [row[:] for row in self.pieces[self.ind]]
-        self.current_pos = {"x": self.width // 2 - len(self.piece[0]) // 2,
-                            "y": 0
-                            }
+        self.current_pos = {"x": self.width // 2 - len(self.piece[0]) // 2, "y": 0}
         if self.check_collision(self.piece, self.current_pos):
             self.gameover = True
 
     def check_collision(self, piece, pos):
+        # Tjekker for kollision med eksisterende brikker eller bund
         future_y = pos["y"] + 1
         for y in range(len(piece)):
             for x in range(len(piece[y])):
@@ -156,6 +166,7 @@ class Tetris:
         return False
 
     def truncate(self, piece, pos):
+        # Trunkerer brikken ved kollision
         gameover = False
         last_collision_row = -1
         for y in range(len(piece)):
@@ -176,6 +187,7 @@ class Tetris:
         return gameover
 
     def store(self, piece, pos):
+        # Gemmer brikken på brættet
         board = [x[:] for x in self.board]
         for y in range(len(piece)):
             for x in range(len(piece[y])):
@@ -184,6 +196,7 @@ class Tetris:
         return board
 
     def check_cleared_rows(self, board):
+        # Tjekker og fjerner komplette rækker
         to_delete = []
         for i, row in enumerate(board[::-1]):
             if 0 not in row:
@@ -193,12 +206,14 @@ class Tetris:
         return len(to_delete), board
 
     def remove_row(self, board, indices):
+        # Fjerner rækker fra brættet
         for i in indices[::-1]:
             del board[i]
             board = [[0 for _ in range(self.width)]] + board
         return board
 
     def step(self, action, render=True, video=None):
+        # Udfører et skridt i spillet
         x, num_rotations = action
         self.current_pos = {"x": x, "y": 0}
         for _ in range(num_rotations):
@@ -228,6 +243,7 @@ class Tetris:
         return score, self.gameover
 
     def render(self, video=None):
+        # Viser spillets tilstand
         if not self.gameover:
             img = [self.piece_colors[p] for row in self.get_current_board_state() for p in row]
         else:
@@ -242,7 +258,6 @@ class Tetris:
         img[:, [i * self.block_size for i in range(self.width)], :] = 0
 
         img = np.concatenate((img, self.extra_board), axis=1)
-
 
         cv2.putText(img, "Score:", (self.width * self.block_size + int(self.block_size / 2), self.block_size),
                     fontFace=cv2.FONT_HERSHEY_DUPLEX, fontScale=1.0, color=self.text_color)
