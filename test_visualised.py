@@ -3,6 +3,7 @@ import torch
 import os
 from src.tetris import Tetris
 import matplotlib.pyplot as plt
+import cv2
 
 def get_args():
     # Henter argumenter fra kommandolinjen
@@ -12,7 +13,7 @@ def get_args():
     parser.add_argument("--width", type=int, default=10, help="Bredden på spillet")
     parser.add_argument("--height", type=int, default=20, help="Højden på spillet")
     parser.add_argument("--block_size", type=int, default=30, help="Størrelsen på en blok")
-    parser.add_argument("--fps", type=int, default=300, help="Frames per second")
+    parser.add_argument("--fps", type=int, default=30, help="Frames per second")
     parser.add_argument("--saved_path", type=str, default="trained_models", help="Sti til gemte modeller")
     parser.add_argument("--max_blocks", type=int, default=50000, help="Maksimalt antal blokke der kan bruges")
 
@@ -39,6 +40,14 @@ def test(opt):
     epoch = 0
     blocks_per_epoch = []
 
+    # Ensure the demo directory exists
+    demo_path = 'demo'
+    os.makedirs(demo_path, exist_ok=True)
+
+    # Video writer setup
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter(os.path.join(demo_path, 'tetris_gameplay.avi'), fourcc, opt.fps, (opt.width * opt.block_size * 2, opt.height * opt.block_size))
+
     # Kører spillet indtil max_blocks er nået
     while total_blocks < opt.max_blocks:
         epoch += 1
@@ -57,7 +66,8 @@ def test(opt):
             predictions = model(next_states)[:, 0]
             index = torch.argmax(predictions).item()
             action = next_actions[index]
-            _, done = env.step(action, render=True)  # Aktivér rendering for at vise spillet
+            _, done = env.step(action, render=True, video=out)  # Pass the video writer
+
             num_blocks += 1
             total_blocks += 1
 
@@ -74,6 +84,10 @@ def test(opt):
 
     # Plotter data
     plot_blocks_per_epoch(blocks_per_epoch, 'Trained Model Blocks per Epoch', 'g')
+
+    # Release the video writer
+    out.release()
+    cv2.destroyAllWindows()
 
 def plot_blocks_per_epoch(blocks_per_epoch, title, color):
     # Plotter blokke per epoch
